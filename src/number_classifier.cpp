@@ -140,14 +140,6 @@ namespace rm_auto_aim {
                         }
                     }
 
-                    bool minsmatch_armor_type = false;
-                    if (armor.type == ArmorType::LARGE) {
-                        minsmatch_armor_type =
-                                armor.number == "outpost" || armor.number == "2" || armor.number == "guard";
-                    } else if (armor.type == ArmorType::SMALL) {
-                        minsmatch_armor_type = armor.number == "1" || armor.number == "base";
-                    }
-                    return minsmatch_armor_type;
                 }
             ),
             armors.end());

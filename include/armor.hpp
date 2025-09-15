@@ -16,36 +16,11 @@ namespace rm_auto_aim {
     const int RED = 1;
     const int BLUE = 0 ;
 
-    enum class ArmorType {SMALL, LARGE, INVALID};  //zeng qiang zuo yong yu
-    const std::string ARMOR_TYPE_STR[3] = {"small", "large", "invalid"};
 
-    struct Light : public cv::Rect {
-        Light() = default;
-        explicit Light(cv::Rect box, cv::Point2f top, cv::Point2f bottom,int area, float tilt_angle
-        ):cv::Rect(box),top(top),bottom(bottom),tilt_angle(tilt_angle)
-        {
-            length = cv::norm(top - bottom);
-            width = area / length;
-            center = (top + bottom) / 2;
-        }
-        int color;
-        cv::Point2f top, bottom;
-        cv::Point2f center;
-        double length;
-        double width;
-        float tilt_angle;
-    };
     struct Armor {
         Armor() = default;
-        Armor(const Light & l1, const Light &l2) {
-            left_light = (l1.center.x < l2.center.x) ? l1 : l2;
-            right_light = (l1.center.x < l2.center.x) ? l2 : l1;
-        }
 
-        Light left_light, right_light;
         cv::Point2f center;
-        ArmorType type;
-
         cv::Mat number_img;
         std::string number;
         float confidence;
