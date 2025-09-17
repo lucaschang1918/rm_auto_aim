@@ -53,8 +53,8 @@ namespace rm_auto_aim {
         cv::Size shape = img.size();
 
         // 缩放比例
-        float r = std::min((float)new_shape.height / shape.height,
-                           (float)new_shape.width / shape.width);
+        float r = std::min((float) new_shape.height / shape.height,
+                           (float) new_shape.width / shape.width);
 
         // 缩放后的大小
         cv::Size new_unpad(int(round(shape.width * r)),
@@ -92,159 +92,142 @@ namespace rm_auto_aim {
         data.dw = left;
         data.dh = top;
 
-        std::cout << "[Preprocess] original=" << shape
-                  << " resized=" << new_unpad
-                  << " padded=" << new_shape
-                  << " r=" << r
-                  << " dw=" << data.dw
-                  << " dh=" << data.dh << std::endl;
-
         return data;
     }
 
 
-
     std::vector<Armor> Detector::detect(const cv::Mat &input) {
-
         auto blob = preprocessImageDate(input);
 
         armors_ = startInferAndNMS(blob);
 
         if (!armors_.empty()) {
-            std::cout<<"find armor"<<std::endl;
             classifier->extractNumbers(input, armors_);
             classifier->classify(armors_);
-
             drawResults(input);
         }
         return armors_;
     }
 
     std::vector<Armor> Detector::startInferAndNMS(dataImg img_data) {
-    static std::once_flag init_flag;
-    static ov::Core core;
-    static ov::CompiledModel compiled_model;
-    static ov::InferRequest infer_request;
-    static ov::Output<const ov::Node> input_port;
+        static std::once_flag init_flag;
+        static ov::Core core;
+        static ov::CompiledModel compiled_model;
+        static ov::InferRequest infer_request;
+        static ov::Output<const ov::Node> input_port;
 
-    // 模型初始化只执行一次
-    std::call_once(init_flag, [&]() {
-        std::cout << "initialize OpenVINO model..." << std::endl;
-        compiled_model = core.compile_model(Detector::model_path, "CPU");
-        infer_request = compiled_model.create_infer_request();
-        input_port = compiled_model.input();
-    });
+        // 模型初始化只执行一次
+        std::call_once(init_flag, [&]() {
+            compiled_model = core.compile_model(Detector::model_path, "CPU");
+            infer_request = compiled_model.create_infer_request();
+            input_port = compiled_model.input();
+        });
 
-    // 构造输入张量
-    ov::Tensor input_tensor(input_port.get_element_type(),
-                            input_port.get_shape(),
-                            img_data.blob.ptr(0));
-    infer_request.set_input_tensor(input_tensor);
+        // 构造输入张量
+        ov::Tensor input_tensor(input_port.get_element_type(),
+                                input_port.get_shape(),
+                                img_data.blob.ptr(0));
+        infer_request.set_input_tensor(input_tensor);
 
-    // -------- 开始推理 --------
-    infer_request.infer();
+        // -------- 开始推理 --------
+        infer_request.infer();
 
-    // -------- 获取输出 --------
-    auto output = infer_request.get_output_tensor(0);
-    auto output_shape = output.get_shape();
-    std::cout << "[Infer] Output tensor shape:";
-    for (auto s : output_shape) std::cout << " " << s;
-    std::cout << std::endl;
+        // -------- 获取输出 --------
+        auto output = infer_request.get_output_tensor(0);
+        auto output_shape = output.get_shape();
 
-    float *data = output.data<float>();
-    cv::Mat output_buffer(output_shape[1], output_shape[2], CV_32F, data);
-    transpose(output_buffer, output_buffer); // [num, 14]
+        float *data = output.data<float>();
+        cv::Mat output_buffer(output_shape[1], output_shape[2], CV_32F, data);
+        transpose(output_buffer, output_buffer); // [num, 14]
 
-    std::vector<Armor> qualifiedArmors;
+        // std::cout << "[Infer] Output buffer:\n" << output_buffer.rowRange(0,5) <<"\n"<<std::endl;
 
-    // 遍历类别（假设 class=2 -> id=4,5）
-    for (int cls = 4; cls < 6; ++cls) {
-        Armors SingleData;
 
-        for (int i = 0; i < output_buffer.rows; i++) {
-            float class_score = output_buffer.at<float>(i, cls);
+        std::vector<Armor> qualifiedArmors;
 
-            // 找最大类别分数
-            float max_class_score = 0.0;
-            for (int j = 4; j < 6; j++) {
-                max_class_score = std::max(max_class_score, output_buffer.at<float>(i, j));
+        // red blue
+        for (int cls = 4; cls < 6; ++cls) {
+            Armors SingleData;
+
+            for (int i = 0; i < output_buffer.rows; i++) {
+                //
+                float class_score = output_buffer.at<float>(i, cls);
+
+                // 找最大类别分数
+                float max_class_score = 0.0;
+                for (int j = 4; j < 6; j++) {
+                    max_class_score = std::max(max_class_score, output_buffer.at<float>(i, j));
+                }
+                if (class_score != max_class_score) continue;
+                if (class_score < Detector::score_threshold) continue;
+
+                SingleData.class_scores.push_back(class_score);
+
+                // 预测框
+                float cx = output_buffer.at<float>(i, 0);
+                float cy = output_buffer.at<float>(i, 1);
+                float w = output_buffer.at<float>(i, 2);
+                float h = output_buffer.at<float>(i, 3);
+
+                // 从 letterbox 图还原回原图
+                float x0 = (cx - 0.5f * w - img_data.dw) / img_data.r;
+                float y0 = (cy - 0.5f * h - img_data.dh) / img_data.r;
+                float x1 = (cx + 0.5f * w - img_data.dw) / img_data.r;
+                float y1 = (cy + 0.5f * h - img_data.dh) / img_data.r;
+
+                int left = std::clamp((int) x0, 0, img_data.input.cols - 1);
+                int top = std::clamp((int) y0, 0, img_data.input.rows - 1);
+                int right = std::clamp((int) x1, 0, img_data.input.cols - 1);
+                int bottom = std::clamp((int) y1, 0, img_data.input.rows - 1);
+
+                SingleData.boxes.emplace_back(left, top, right - left, bottom - top);
+
+                // 关键点
+                std::vector<float> keypoints;
+                cv::Mat kpts = output_buffer.row(i).colRange(6, 14);
+                for (int j = 0; j < 4; j++) {
+                    float x = (kpts.at<float>(0, j * 2 + 0) - img_data.dw) / img_data.r;
+                    float y = (kpts.at<float>(0, j * 2 + 1) - img_data.dh) / img_data.r;
+                    x = std::clamp(x, 0.0f, (float) img_data.input.cols - 1);
+                    y = std::clamp(y, 0.0f, (float) img_data.input.rows - 1);
+                    keypoints.push_back(x);
+                    keypoints.push_back(y);
+                }
+                SingleData.objects_keypoints.push_back(keypoints);
             }
-            if (class_score != max_class_score) continue;
-            if (class_score < Detector::score_threshold) continue;
 
-            SingleData.class_scores.push_back(class_score);
+            SingleData.color = cls - 4 > 0 ? RED : BLUE;
 
-            // 预测框
-            float cx = output_buffer.at<float>(i, 0);
-            float cy = output_buffer.at<float>(i, 1);
-            float w  = output_buffer.at<float>(i, 2);
-            float h  = output_buffer.at<float>(i, 3);
+            // NMS
+            std::vector<int> indices;
+            cv::dnn::NMSBoxes(SingleData.boxes, SingleData.class_scores,
+                              Detector::score_threshold, Detector::nms_threshold, indices);
 
-            // 从 letterbox 图还原回原图
-            float x0 = (cx - 0.5f * w - img_data.dw) / img_data.r;
-            float y0 = (cy - 0.5f * h - img_data.dh) / img_data.r;
-            float x1 = (cx + 0.5f * w - img_data.dw) / img_data.r;
-            float y1 = (cy + 0.5f * h - img_data.dh) / img_data.r;
+            for (auto i: indices) {
+                Armor armor;
+                armor.box = SingleData.boxes[i];
+                armor.class_scores = SingleData.class_scores[i];
+                armor.color = SingleData.color;
 
-            int left   = std::clamp((int)x0, 0, img_data.input.cols - 1);
-            int top    = std::clamp((int)y0, 0, img_data.input.rows - 1);
-            int right  = std::clamp((int)x1, 0, img_data.input.cols - 1);
-            int bottom = std::clamp((int)y1, 0, img_data.input.rows - 1);
+                for (int j = 0; j < 4; j++) {
+                    armor.objects_keypoints[j] = cv::Point(
+                        (int) SingleData.objects_keypoints[i][j * 2 + 0],
+                        (int) SingleData.objects_keypoints[i][j * 2 + 1]
+                    );
+                }
+                sort_keypoints(armor.objects_keypoints);
 
-            SingleData.boxes.emplace_back(left, top, right - left, bottom - top);
+                if (armor.color != detector_color) {
+                    continue;
+                }
 
-            // 关键点
-            std::vector<float> keypoints;
-            cv::Mat kpts = output_buffer.row(i).colRange(6, 14);
-            for (int j = 0; j < 4; j++) {
-                float x = (kpts.at<float>(0, j*2 + 0) - img_data.dw) / img_data.r;
-                float y = (kpts.at<float>(0, j*2 + 1) - img_data.dh) / img_data.r;
-                x = std::clamp(x, 0.0f, (float)img_data.input.cols - 1);
-                y = std::clamp(y, 0.0f, (float)img_data.input.rows - 1);
-                keypoints.push_back(x);
-                keypoints.push_back(y);
+                qualifiedArmors.push_back(armor);
             }
-            SingleData.objects_keypoints.push_back(keypoints);
         }
 
-        SingleData.class_ids = cls - 4;
 
-        // NMS
-        std::vector<int> indices;
-        cv::dnn::NMSBoxes(SingleData.boxes, SingleData.class_scores,
-                          Detector::score_threshold, Detector::nms_threshold, indices);
-
-        for (auto i : indices) {
-            Armor armor;
-            armor.box = SingleData.boxes[i];
-            armor.class_scores = SingleData.class_scores[i];
-            armor.class_ids = SingleData.class_ids;
-
-            for (int j = 0; j < 4; j++) {
-                armor.objects_keypoints[j] = cv::Point(
-                    (int)SingleData.objects_keypoints[i][j*2 + 0],
-                    (int)SingleData.objects_keypoints[i][j*2 + 1]
-                );
-            }
-            sort_keypoints(armor.objects_keypoints);
-
-            if (armor.class_ids != detector_color) {
-                continue;
-            }
-
-            qualifiedArmors.push_back(armor);
-        }
-
-        std::cout << "[Post] Class " << cls
-                  << ": before NMS = " << SingleData.boxes.size()
-                  << ", after NMS = " << indices.size() << std::endl;
+        return qualifiedArmors;
     }
-
-    std::cout << "[Post] Total qualified armors = "
-              << qualifiedArmors.size() << std::endl;
-
-    return qualifiedArmors;
-}
 
     cv::Mat Detector::getAllNumbersImage() {
         if (armors_.empty()) {
@@ -263,21 +246,29 @@ namespace rm_auto_aim {
 
 
     void Detector::drawResults(const cv::Mat &src) {
-        for (const auto &armor : armors_) {
+        for (const auto &armor: armors_) {
             // 绘制检测框
             cv::rectangle(src, armor.box, cv::Scalar(0, 255, 0), 2);
 
             // 绘制四个关键点
-            for (const auto &pt : armor.objects_keypoints) {
+            for (const auto &pt: armor.objects_keypoints) {
                 cv::circle(src, pt, 3, cv::Scalar(0, 0, 255), -1);
             }
+            cv::Point2f p1 = armor.objects_keypoints[0]; // 第1点
+            cv::Point2f p2 = armor.objects_keypoints[2]; // 第3点
+            cv::Point2f p3 = armor.objects_keypoints[1]; // 第2点
+            cv::Point2f p4 = armor.objects_keypoints[3]; // 第4点
+
 
             // 颜色文字
             std::string color_text;
-            switch (armor.class_ids) {
-                case RED: color_text = "RED"; break;
-                case BLUE: color_text = "BLUE"; break;
-                default: color_text = "UNK"; break;
+            switch (armor.color) {
+                case RED: color_text = "RED";
+                    break;
+                case BLUE: color_text = "BLUE";
+                    break;
+                default: color_text = "UNK";
+                    break;
             }
 
             // 分类结果（数字 + 置信度）
@@ -293,16 +284,18 @@ namespace rm_auto_aim {
                           cv::Scalar(0, 255, 0), cv::FILLED);
 
 
-            cv::Scalar font_color = (armor.class_ids == RED) ? cv::Scalar(0,0,255) :
-                                    (armor.class_ids == BLUE) ? cv::Scalar(255,0,0) :
-                                    cv::Scalar(0,0,0);
+            cv::Scalar font_color = (armor.color == RED)
+                                        ? cv::Scalar(0, 0, 255)
+                                        : (armor.color == BLUE)
+                                              ? cv::Scalar(255, 0, 0)
+                                              : cv::Scalar(0, 0, 0);
+
+            // 画对角线
+            cv::line(src, p1, p2, font_color, 2); // 对角线1
+            cv::line(src, p3, p4, font_color, 2); // 对角线2
 
             cv::putText(src, text, text_origin, cv::FONT_HERSHEY_SIMPLEX, 0.5,
                         font_color, 1, cv::LINE_AA);
         }
     }
-
-
-
-
 }

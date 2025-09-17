@@ -14,25 +14,28 @@
 
 #include "armor.hpp"
 #include "number_classifier.hpp"
+
 namespace rm_auto_aim {
     class Detector {
     public:
-
-        Detector(const std::string & model_path, const float score_threshold,const float nms_threshold ,const int detector_color)
-        :model_path(model_path),score_threshold(score_threshold),nms_threshold(nms_threshold),detector_color(detector_color){
-
+        Detector(const std::string &model_path, const float score_threshold, const float nms_threshold,
+                 const int detector_color)
+            : model_path(model_path), score_threshold(score_threshold), nms_threshold(nms_threshold),
+              detector_color(detector_color) {
         }
 
-        std::vector<Armor> detect(const cv::Mat & input);
-        dataImg preprocessImageDate(const cv::Mat& img, cv::Size new_shape=cv::Size( 416, 416), cv::Scalar color=cv::Scalar(114,114,114)); //图片预处理
-        std::vector<Armor> startInferAndNMS(dataImg data );//开始推理并返回结果
+        std::vector<Armor> detect(const cv::Mat &input);
+
+        dataImg preprocessImageDate(const cv::Mat &img, cv::Size new_shape = cv::Size(416, 416),
+                                    cv::Scalar color = cv::Scalar(114, 114, 114)); //图片预处理
+        std::vector<Armor> startInferAndNMS(dataImg data); //开始推理并返回结果
         cv::Mat getAllNumbersImage();
-        void drawResults(const cv::Mat & img);
 
-          std::string model_path ;
-          float score_threshold;
-          float nms_threshold ;
+        void drawResults(const cv::Mat &img);
 
+        std::string model_path;
+        float score_threshold;
+        float nms_threshold;
 
 
         int detector_color;
@@ -45,7 +48,6 @@ namespace rm_auto_aim {
         // auto_aim_interfaces::msg::DebugArmors debug_armors;
 
     private:
-
         std::vector<Armor> armors_;
     };
 }

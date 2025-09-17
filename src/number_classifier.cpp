@@ -24,9 +24,9 @@
 
 namespace rm_auto_aim {
     NumberClassifier::NumberClassifier(const std::string &model_path,
-                                         const std::string &label_path,
-                                         const double threshold,
-                                         const std::vector<std::string> &ignore_classes) : threshold(threshold),
+                                       const std::string &label_path,
+                                       const double threshold,
+                                       const std::vector<std::string> &ignore_classes) : threshold(threshold),
         ignore_classes_(ignore_classes) {
         net_ = cv::dnn::readNetFromONNX(model_path);
 
@@ -37,8 +37,7 @@ namespace rm_auto_aim {
         }
     }
 
-    void NumberClassifier::extractNumbers(const cv::Mat & src, std::vector<Armor> & armors)
-    {
+    void NumberClassifier::extractNumbers(const cv::Mat &src, std::vector<Armor> &armors) {
         // static int num = 0;
         // Light length in image
         const int light_length = 12;
@@ -49,13 +48,13 @@ namespace rm_auto_aim {
         // Number ROI size
         const cv::Size roi_size(20, 28);
 
-        for (auto & armor : armors) {
+        for (auto &armor: armors) {
             // Warp perspective transform
             cv::Point2f lights_vertices[4] = {
                 armor.objects_keypoints[0], // 左上 (top-left)
                 armor.objects_keypoints[3], // 右上 (top-right)
                 armor.objects_keypoints[2], // 右下 (bottom-right)
-                armor.objects_keypoints[1]  // 左下 (bottom-left)
+                armor.objects_keypoints[1] // 左下 (bottom-left)
             };
 
             const int top_light_y = (warp_height - light_length) / 2 - 1;
@@ -63,10 +62,10 @@ namespace rm_auto_aim {
             const int warp_width = small_armor_width;
 
             cv::Point2f target_vertices[4] = {
-                cv::Point(0, top_light_y),           // 左上
+                cv::Point(0, top_light_y), // 左上
                 cv::Point(warp_width - 1, top_light_y), // 右上
                 cv::Point(warp_width - 1, bottom_light_y), // 右下
-                cv::Point(0, bottom_light_y)         // 左下
+                cv::Point(0, bottom_light_y) // 左下
             };
 
             cv::Mat number_image;
@@ -88,14 +87,11 @@ namespace rm_auto_aim {
             // cv::Mat number_img_ = perform_opening(number_image,2);
 
             armor.number_img = number_image;
-
-            std::cout<<number_image<<std::endl;
-
         }
     }
+
     void NumberClassifier::classify(std::vector<Armor> &armors) {
         for (auto &armor: armors) {
-
             cv::Mat image = armor.number_img.clone();
             image = image / 255.0;
 
@@ -123,8 +119,6 @@ namespace rm_auto_aim {
             result_ss << armor.number << ":" << std::fixed << std::setprecision(1)
                     << armor.confidence * 100.0 << "%";
             armor.classfication_result = result_ss.str();
-
-            std::cout<<armor.classfication_result<<std::endl;
         }
 
         armors.erase(
@@ -139,12 +133,9 @@ namespace rm_auto_aim {
                             return true;
                         }
                     }
-
                 }
             ),
             armors.end());
     }
-
-
 }
 

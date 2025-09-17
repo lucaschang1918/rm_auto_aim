@@ -12,9 +12,8 @@
 #include <string>
 
 namespace rm_auto_aim {
-
-    const int RED = 1;
-    const int BLUE = 0 ;
+    const int RED = 0;
+    const int BLUE = 1;
 
 
     struct Armor {
@@ -23,33 +22,30 @@ namespace rm_auto_aim {
         cv::Point2f center;
         cv::Mat number_img;
         std::string number;
+
         float confidence;
         std::string classfication_result;
         //
-        float class_scores;
+        float class_scores; //red blue sore
         cv::Rect box;
         cv::Point2f objects_keypoints[4];
-        int class_ids;//color
+        int color;
     };
-    struct Armors{
+
+    struct Armors {
         std::vector<float> class_scores;
         std::vector<cv::Rect> boxes;
-        std::vector<std::vector<float>> objects_keypoints;
-        int class_ids;
-
+        std::vector<std::vector<float> > objects_keypoints;
+        int color;
     };
 
     struct dataImg {
-        cv::Mat blob;     // 模型输入
-        cv::Mat input;    // 原始图像
-        float r;          // 缩放比例
-        int dw;           // x方向padding
-        int dh;           // y方向padding
+        cv::Mat blob; // 模型输入
+        cv::Mat input; // 原始图像
+        float r; // 缩放比例
+        int dw; // x方向padding
+        int dh; // y方向padding
     };
-
-
-
-
 }
 
 

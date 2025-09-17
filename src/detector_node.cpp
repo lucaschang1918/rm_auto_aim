@@ -1,28 +1,27 @@
 
 #include "detector_node.hpp"
-namespace rm_auto_aim {
 
+namespace rm_auto_aim {
     ArmorDetectorNode::ArmorDetectorNode() {
         detector_ = initDetector();
     }
-    std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
 
+    std::unique_ptr<Detector> ArmorDetectorNode::initDetector() {
         std::string model_path_armor = "../model/mobilenetv3_last_int_all_new/last.xml";
         float score_threshold = 0.7;
         float nms_threshold = 0.3;
-        int detector_color = RED;
+        int detector_color = BLUE;
 
-        auto detector = std::make_unique<Detector>(model_path_armor,score_threshold,nms_threshold,detector_color);
+        auto detector = std::make_unique<Detector>(model_path_armor, score_threshold, nms_threshold, detector_color);
         std::string model_path_number = "../model/number_classifier.onnx";
         auto label_path = "../model/label.txt";
         double threshold = 0.7;
         std::vector<std::string> ignore_classes = {"negative"};
         detector->classifier =
-            std::make_unique<NumberClassifier>(model_path_number, label_path, threshold, ignore_classes);
+                std::make_unique<NumberClassifier>(model_path_number, label_path, threshold, ignore_classes);
 
         return detector;
     }
-
 } // namespace rm_auto_aim
 
 
